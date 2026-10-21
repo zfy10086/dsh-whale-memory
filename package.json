@@ -1,0 +1,50 @@
+{
+  "name": "dsh-whale-memory",
+  "version": "0.3.0",
+  "description": "DSH 的会话级「鲸鲸记忆」开关与备份同步：开=带记忆说话并维护备份，关=纯干活（需配合 meow-memory）",
+  "license": "MIT",
+  "author": "zfy10086 (https://github.com/zfy10086)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zfy10086/dsh-whale-memory.git"
+  },
+  "homepage": "https://github.com/zfy10086/dsh-whale-memory",
+  "bugs": {
+    "url": "https://github.com/zfy10086/dsh-whale-memory/issues"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "test": "node test.mjs && node test-sync.mjs && node test-host.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  }
+}
