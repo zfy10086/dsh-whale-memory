@@ -3,7 +3,7 @@
   "version": "0.3.1",
   "description": "DSH 的会话级「鲸鲸记忆」开关与备份同步：开=带记忆说话并维护备份，关=纯干活（需配合 meow-memory）",
   "license": "MIT",
-  "icon": "./icon.png",
+  "icon": "icon.png",
   "author": "zfy10086 (https://github.com/zfy10086)",
   "repository": {
     "type": "git",
@@ -38,17 +38,13 @@
   "scripts": {
     "test": "node test.mjs && node test-sync.mjs && node test-host.mjs"
   },
-  "peerDependencies": {
-    "@deepseek-ai/schemastery": "*"
-  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-primitives"
+        "@deepseek-ai/dsh-client-ui-conversation"
       ],
       "platform": "web"
     }
