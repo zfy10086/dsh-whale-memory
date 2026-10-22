@@ -5,7 +5,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -138,7 +138,7 @@ r = await request(routes.get('/whale-memory/api/settings'), { method: 'POST', bo
 r = await request(routes.get('/whale-memory/api/seed'), { method: 'POST', body: { sessionId } })
 assert.equal(r.status, 200, JSON.stringify(r.body))
 assert.equal(r.body.seeded, false)
-assert.equal(r.body.message, '本地已经有 soul 了，不覆盖')
+assert.ok(r.body.message.includes('本地已经有 soul 了，不覆盖'), r.body.message)
 {
   const check = new DatabaseSync(join(workspace, '.dsh-meow', 'memory.db'))
   assert.equal(check.prepare('SELECT count(*) AS n FROM soul').get().n, 1, '没有被接生出第二个「我」')
@@ -168,6 +168,23 @@ assert.ok(String(r.body.notice || '').includes('三条人设'), `打开时应提
   assert.ok(seeded.prepare("SELECT content FROM soul WHERE id = 'whale-seed-soul'").get(), '新工作区有了鲸鲸的 soul')
   seeded.close()
 }
+assert.ok(readFileSync(join(backupDir2, '.whale-seeded.json'), 'utf8').includes('whale-seed-soul'), '接生标记落在「已保存的」备份路径里')
+
+// 「立即初始化」：请求里的路径优先于已保存的设置（设置页没点保存也算数）
+const draftDir = join(home, 'draft-backup')
+{
+  const db = new DatabaseSync(join(workspace2, '.dsh-meow', 'memory.db'))
+  db.exec('DELETE FROM soul'); db.exec('DELETE FROM user'); db.exec('DELETE FROM rules')
+  db.close()
+  rmSync(join(backupDir2, '.whale-seeded.json'), { force: true })
+}
+r = await request(routes.get('/whale-memory/api/seed'), { method: 'POST', body: { sessionId: sessionId2, backupDir: draftDir } })
+assert.equal(r.status, 200, JSON.stringify(r.body))
+assert.equal(r.body.seeded, true)
+assert.equal(r.body.backupDir, draftDir, '按请求里带的路径初始化')
+assert.ok(r.body.message.includes(draftDir), '提示里说清写到哪个备份目录')
+assert.ok(readFileSync(join(draftDir, '.whale-seeded.json'), 'utf8').includes('whale-seed-soul'), '标记落在草稿路径')
+assert.equal(existsSync(join(backupDir2, '.whale-seeded.json')), false, '没有写回旧的已保存路径')
 
 console.log('✅ dsh-whale-memory host wiring tests passed')
 try { rmSync(home, { recursive: true, force: true }) } catch { /* ignore */ }
