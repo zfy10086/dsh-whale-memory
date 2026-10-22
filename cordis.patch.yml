@@ -1,5 +1,0 @@
-# dsh-whale-memory：往 profile 的层栈里插入本插件。
-# 条目 id `whale-memory` 同时是设置页里这张卡片的命名空间。
-- insert:
-    - id: whale-memory
-      name: dsh-whale-memory
