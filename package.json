@@ -1,6 +1,6 @@
 {
   "name": "dsh-whale-memory",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "DSH 的会话级「鲸鲸记忆」开关与备份同步：开=带记忆说话并维护备份，关=纯干活（需配合 meow-memory）",
   "license": "MIT",
   "icon": "icon.png",

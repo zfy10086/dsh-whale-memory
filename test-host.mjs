@@ -55,6 +55,7 @@ assert.ok(routes.has('/whale-memory/api/state'))
 assert.ok(routes.has('/whale-memory/api/toggle'))
 assert.ok(routes.has('/whale-memory/api/ensure'))
 assert.ok(routes.has('/whale-memory/api/health'))
+assert.ok(routes.has('/whale-memory/api/seed'))
 
 function request(route, { method = 'GET', url = route.path, body } = {}) {
   return new Promise((resolve) => {
@@ -128,6 +129,45 @@ assert.equal(r.body.config.intervalHours, 4)
 assert.equal(r.body.config.defaultOn, true)
 r = await request(routes.get('/whale-memory/api/settings'), {})
 assert.equal(r.body.config.intervalHours, 4, '设置已持久化')
+assert.equal(r.body.config.seedOnInit, true, '新设备自动初始化默认开')
+r = await request(routes.get('/whale-memory/api/settings'), { method: 'POST', body: { seedOnInit: false } })
+assert.equal(r.body.config.seedOnInit, false)
+r = await request(routes.get('/whale-memory/api/settings'), { method: 'POST', body: { seedOnInit: true } })
+
+// 「立即初始化」：这个工作区已经有 soul（s1），必须拒绝覆盖
+r = await request(routes.get('/whale-memory/api/seed'), { method: 'POST', body: { sessionId } })
+assert.equal(r.status, 200, JSON.stringify(r.body))
+assert.equal(r.body.seeded, false)
+assert.equal(r.body.message, '本地已经有 soul 了，不覆盖')
+{
+  const check = new DatabaseSync(join(workspace, '.dsh-meow', 'memory.db'))
+  assert.equal(check.prepare('SELECT count(*) AS n FROM soul').get().n, 1, '没有被接生出第二个「我」')
+  check.close()
+}
+
+// 空库的新工作区：/toggle 打开时自动接生
+const workspace2 = join(home, 'ws-empty')
+mkdirSync(join(workspace2, '.dsh-meow'), { recursive: true })
+const { DatabaseSync: DB2 } = await import('node:sqlite')
+new DB2(join(workspace2, '.dsh-meow', 'memory.db')).close()
+const sessionId2 = 'session-test-fresh'
+const sessionDir2 = join(home, 'sessions', '--ws-empty--', sessionId2)
+mkdirSync(sessionDir2, { recursive: true })
+writeFileSync(join(sessionDir2, 'session.v4.jsonl.zstd'), zstdCompressSync(Buffer.from(JSON.stringify({
+  type: 'session', version: 4, id: sessionId2, createdAt: Date.now() + 60_000, cwd: workspace2,
+}) + '\n', 'utf8')))
+const backupDir2 = join(home, 'backup-fresh')
+// 换到全新的空备份位置，模拟「新设备」：没有任何旧条目可拉
+r = await request(routes.get('/whale-memory/api/settings'), { method: 'POST', body: { backupDir: backupDir2 } })
+assert.equal(r.status, 200, JSON.stringify(r.body))
+r = await request(routes.get('/whale-memory/api/toggle'), { method: 'POST', body: { sessionId: sessionId2, on: true } })
+assert.equal(r.status, 200, JSON.stringify(r.body))
+assert.ok(String(r.body.notice || '').includes('三条人设'), `打开时应提示接生：${r.body.notice}`)
+{
+  const seeded = new DatabaseSync(join(workspace2, '.dsh-meow', 'memory.db'))
+  assert.ok(seeded.prepare("SELECT content FROM soul WHERE id = 'whale-seed-soul'").get(), '新工作区有了鲸鲸的 soul')
+  seeded.close()
+}
 
 console.log('✅ dsh-whale-memory host wiring tests passed')
 try { rmSync(home, { recursive: true, force: true }) } catch { /* ignore */ }

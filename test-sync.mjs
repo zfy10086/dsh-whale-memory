@@ -12,7 +12,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh-whale-memory-sync-'))
 
-const { syncWorkspace, flushWorkspace, resolveBackupDir, looksLikeBackup } = await import('./lib/sync.js')
+const { syncWorkspace, flushWorkspace, resolveBackupDir, looksLikeBackup, seedPersonaIfEmpty, readSeedMarker } = await import('./lib/sync.js')
 
 const COMMON = (extra = '') => `(
   id TEXT PRIMARY KEY, title TEXT, content TEXT NOT NULL,
@@ -153,6 +153,54 @@ try {
   const ambiguous = syncWorkspace(workspace, { ...config, backupDir: multiBase })
   assert.equal(ambiguous.ok, false)
   assert.equal(ambiguous.error, 'ambiguous-backup')
+
+  // ── 新设备接生：空库 + 空备份 → 写下三条人设，并留标记 ──
+  {
+    const ws3 = join(process.env.DSH_HOME, 'ws3')
+    makeLocalDb(ws3, [])
+    const seedDir = join(process.env.DSH_HOME, 'backup3')
+    mkdirSync(seedDir, { recursive: true })
+    const dbFile = join(ws3, '.dsh-meow', 'memory.db')
+
+    const first = seedPersonaIfEmpty(dbFile, { dir: seedDir, sessionId: 'seed-1', now: 1000 })
+    assert.equal(first.ok, true, first.error)
+    assert.equal(first.seeded, true, '空库 → 接生')
+    assert.deepEqual([...first.levels].sort(), ['rules', 'soul', 'user'], '三层都写了')
+    {
+      const db = new DatabaseSync(dbFile)
+      assert.equal(db.prepare('SELECT count(*) AS n FROM soul').get().n, 1, 'soul 一条')
+      assert.equal(db.prepare('SELECT count(*) AS n FROM user').get().n, 1, 'user 一条')
+      assert.equal(db.prepare('SELECT count(*) AS n FROM rules').get().n, 1, 'rules 一条')
+      const soul = db.prepare("SELECT content, importance FROM soul WHERE id = 'whale-seed-soul'").get()
+      assert.ok(soul.content.includes('鲸鲸'), '人设内容写进去了')
+      assert.equal(soul.importance, 4, 'soul importance=4')
+      db.close()
+    }
+    assert.ok(readSeedMarker(seedDir) !== null, '备份目录留下接生标记')
+
+    // 第二次：标记在 → 不再写
+    const second = seedPersonaIfEmpty(dbFile, { dir: seedDir, now: 2000 })
+    assert.equal(second.seeded, false)
+    assert.equal(second.reason, 'already-marked')
+
+    // 已有 soul 的工作区：绝不覆盖（手动 force 也不行）
+    const ws4 = join(process.env.DSH_HOME, 'ws4')
+    makeLocalDb(ws4, [{ level: 'soul', id: 'keep', content: '我原来的鲸鲸' }])
+    const guarded = seedPersonaIfEmpty(join(ws4, '.dsh-meow', 'memory.db'), { dir: seedDir, force: true })
+    assert.equal(guarded.seeded, false)
+    assert.equal(guarded.reason, 'has-soul')
+    {
+      const db = new DatabaseSync(join(ws4, '.dsh-meow', 'memory.db'))
+      assert.equal(db.prepare('SELECT count(*) AS n FROM soul').get().n, 1, '没有多出第二个「我」')
+      assert.equal(db.prepare("SELECT content FROM soul WHERE id = 'keep'").get().content, '我原来的鲸鲸', '原内容没被改')
+      db.close()
+    }
+
+    // 没有本地库 → no-local-db
+    const missing = seedPersonaIfEmpty(join(process.env.DSH_HOME, 'nope', '.dsh-meow', 'memory.db'), {})
+    assert.equal(missing.ok, false)
+    assert.equal(missing.error, 'no-local-db')
+  }
 
   console.log('✅ dsh-whale-memory sync tests passed')
 } finally {
